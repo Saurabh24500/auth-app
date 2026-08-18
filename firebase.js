@@ -1,5 +1,6 @@
 require('dotenv').config();
 const admin = require('firebase-admin');
+const { getAuth } = require('firebase-admin/auth');
 
 function isConfigured() {
   return !!(
@@ -9,24 +10,23 @@ function isConfigured() {
   );
 }
 
-let initialized = false;
+let app = null;
 
 function init() {
-  if (initialized || !isConfigured()) return;
-  admin.initializeApp({
-    credential: admin.credential.cert({
+  if (app || !isConfigured()) return;
+  app = admin.initializeApp({
+    credential: admin.cert({
       projectId: process.env.FIREBASE_PROJECT_ID,
       clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
       privateKey: (process.env.FIREBASE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
     }),
   });
-  initialized = true;
 }
 
 async function verifyIdToken(idToken) {
   init();
-  if (!initialized) throw new Error('Firebase is not configured.');
-  return admin.auth().verifyIdToken(idToken);
+  if (!app) throw new Error('Firebase is not configured.');
+  return getAuth(app).verifyIdToken(idToken);
 }
 
 function webConfig() {
