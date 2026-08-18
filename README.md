@@ -24,7 +24,7 @@ A production-ready authentication system that keeps bots out and real users in:
 | 🧑‍🤝‍🧑 **Registration** | First name, last name, **email and/or mobile** (real email checked via DNS MX lookup) |
 | 🛡️ **Captcha** | Auto-refreshing math captcha stops bots, with expiry + one-time use |
 | 🔒 **Strong passwords** | Min 6 chars + uppercase + lowercase + digit + special char, with a **live strength meter** and rule checklist |
-| 📧📱 **OTP verification** | 6-digit code via **email (SMTP)** or **SMS (Twilio)**, sent after signup *and* after login of unverified accounts |
+| 📧📱 **OTP verification** | 6-digit code via **email (SMTP)** or **SMS (Firebase Phone Auth)** — free tier, sent after signup *and* after login of unverified accounts |
 | ⏳ **OTP hardening** | 10-min expiry, hashed storage, 60s resend cooldown, max 3 sends, **5 wrong attempts = code burned** |
 | 🚫 **Brute-force lockout** | 5 failed logins = account locked 15 minutes |
 | 🗄️ **Supabase storage** | Login details stored in cloud Postgres — auto-falls back to SQLite if unconfigured |
@@ -62,9 +62,9 @@ npm start                 # → http://localhost:3000
 | `SUPABASE_URL` | Your Supabase project URL | for Supabase |
 | `SUPABASE_SECRET_KEY` | Supabase server key (`sb_secret_...`) | for Supabase |
 | `SMTP_HOST` / `SMTP_USER` / `SMTP_PASS` / `EMAIL_FROM` | Gmail/SMTP for email OTP | for real emails |
-| `TWILIO_ACCOUNT_SID` / `AUTH_TOKEN` / `FROM_NUMBER` | Twilio for SMS OTP | for real SMS |
+| `FIREBASE_PROJECT_ID` / `FIREBASE_CLIENT_EMAIL` / `FIREBASE_PRIVATE_KEY` / `FIREBASE_WEB_API_KEY` | Firebase (for free SMS OTP) | for SMS |
 
-> Without SMTP/Twilio, OTPs are printed to the server console (and logged in dev).
+> Without SMTP, email OTPs are printed to the server console (and logged in dev). SMS OTP uses **Firebase Phone Auth** (free tier, up to 10,000 verifications/month, global) — see the Firebase setup section below.
 
 ## 🗄️ Database
 
@@ -93,8 +93,17 @@ Full **end-to-end + adversarial** suite passed against the live Supabase databas
 ## 📦 Deploy to Render (free)
 
 1. Push this repo to GitHub.
-2. Render → **New → Web Service** → connect your repo (it auto-uses `render.yaml`).
-3. In **Environment**, set: `SUPABASE_SECRET_KEY`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM` (hidden values — the rest are already in `render.yaml`).
+2. Render → **New → Blueprint** → connect your repo (it auto-uses `render.yaml`).
+3. In the service's **Environment**, set the hidden values: `SUPABASE_SECRET_KEY`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM`, and the `FIREBASE_*` keys.
+
+## 🔥 Free SMS OTP with Firebase (5 min setup)
+
+1. Go to [firebase.google.com](https://firebase.google.com) → **Add project** → name it, create.
+2. Enable phone auth: **Authentication → Sign-in method → Phone → Enable**.
+3. Add your domains: **Authentication → Settings → Authorized domains** → add `localhost`, and your Render URL.
+4. Get the service account: **Project Settings → Service accounts → Generate new private key** → download JSON → copy `project_id`, `client_email`, and `private_key` (keep `\n` in the key) into `.env`.
+5. Get the web API key: **Project Settings → General → Your apps → Web app** → copy the `apiKey` into `FIREBASE_WEB_API_KEY`.
+6. Restart the app. SMS OTPs now send for free — globally.
 
 ## 📄 Documentation
 
