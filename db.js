@@ -15,6 +15,8 @@ db.exec(`
     mobile        TEXT UNIQUE,
     password_hash TEXT NOT NULL,
     verified      INTEGER NOT NULL DEFAULT 0,
+    verified_at   TEXT,
+    last_login_at TEXT,
     created_at    TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
@@ -33,7 +35,17 @@ db.exec(`
     count           INTEGER NOT NULL DEFAULT 0,
     locked_until    TEXT
   );
+
+  CREATE TABLE IF NOT EXISTS logins (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    login_at  TEXT NOT NULL
+  );
 `);
+
+const userCols = db.prepare(`PRAGMA table_info('users')`).all().map((c) => c.name);
+if (!userCols.includes('verified_at')) db.exec(`ALTER TABLE users ADD COLUMN verified_at TEXT`);
+if (!userCols.includes('last_login_at')) db.exec(`ALTER TABLE users ADD COLUMN last_login_at TEXT`);
 
 const userStmts = {
   findByEmail: db.prepare('SELECT * FROM users WHERE email = ?'),
@@ -43,7 +55,14 @@ const userStmts = {
   insert: db.prepare(
     'INSERT INTO users (first_name, last_name, email, mobile, password_hash) VALUES (?, ?, ?, ?, ?)'
   ),
-  verify: db.prepare('UPDATE users SET verified = 1 WHERE id = ?'),
+  verify: db.prepare('UPDATE users SET verified = 1, verified_at = ? WHERE id = ?'),
+  updateLastLogin: db.prepare('UPDATE users SET last_login_at = ? WHERE id = ?'),
+  delete: db.prepare('DELETE FROM users WHERE id = ?'),
+};
+
+const loginStmts = {
+  insert: db.prepare('INSERT INTO logins (user_id, login_at) VALUES (?, ?)'),
+  history: db.prepare('SELECT * FROM logins WHERE user_id = ? ORDER BY id DESC LIMIT ?'),
 };
 
 const otpStmts = {
@@ -65,4 +84,4 @@ const attemptStmts = {
   clear: db.prepare('DELETE FROM login_attempts WHERE email_or_mobile = ?'),
 };
 
-module.exports = { db, userStmts, otpStmts, attemptStmts };
+module.exports = { db, userStmts, otpStmts, attemptStmts, loginStmts };

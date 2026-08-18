@@ -280,6 +280,7 @@ app.post('/api/verify-otp', async (req, res) => {
   otpAttempts.delete(key);
   await data.markOtpUsed(row.id);
   await data.markUserVerified(userId);
+  await data.recordLogin(userId);
 
   await regenerateSession(req);
   req.session.userId = userId;
@@ -345,6 +346,7 @@ app.post('/api/login', async (req, res) => {
 
     await regenerateSession(req);
     req.session.userId = user.id;
+    await data.recordLogin(user.id);
     res.json({ ok: true, name: `${user.first_name} ${user.last_name}` });
   } catch (err) {
     console.error(err);
@@ -367,7 +369,34 @@ app.get('/api/me', async (req, res) => {
     email: user.email,
     mobile: user.mobile,
     verified: !!user.verified,
+    createdAt: user.created_at,
+    verifiedAt: user.verified_at || null,
+    lastLoginAt: user.last_login_at || null,
   });
+});
+
+app.get('/api/login-history', async (req, res) => {
+  if (!req.session.userId) return res.status(401).json({ ok: false, error: 'Not logged in.' });
+  try {
+    const history = await data.loginHistory(req.session.userId, 10);
+    res.json({ ok: true, history });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ ok: false, error: 'Failed to load login history.' });
+  }
+});
+
+app.post('/api/delete-account', async (req, res) => {
+  if (!req.session.userId) return res.status(401).json({ ok: false, error: 'Not logged in.' });
+  try {
+    const user = await data.findUserById(req.session.userId);
+    if (!user) return res.status(404).json({ ok: false, error: 'Account not found.' });
+    await data.deleteUser(user.id);
+    req.session.destroy(() => res.json({ ok: true }));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ ok: false, error: 'Failed to delete account.' });
+  }
 });
 
 app.get('/api/pending', (req, res) => {
@@ -416,6 +445,7 @@ app.post('/api/firebase/verify-token', async (req, res) => {
   }
 
   await data.markUserVerified(user.id);
+  await data.recordLogin(user.id);
   await regenerateSession(req);
   req.session.userId = user.id;
   delete req.session.pendingUserId;

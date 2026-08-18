@@ -109,8 +109,34 @@ module.exports = {
     return request(`/users?id=eq.${q(id)}`, {
       method: 'PATCH',
       headers: { Prefer: 'return=representation' },
-      body: { verified: true },
+      body: { verified: true, verified_at: new Date().toISOString() },
     }).then((rows) => rows[0] || null);
+  },
+
+  updateLastLogin(id) {
+    return request(`/users?id=eq.${q(id)}`, {
+      method: 'PATCH',
+      headers: { Prefer: 'return=representation' },
+      body: { last_login_at: new Date().toISOString() },
+    }).then((rows) => rows[0] || null);
+  },
+
+  deleteUser(id) {
+    return request(`/users?id=eq.${q(id)}`, { method: 'DELETE' });
+  },
+
+  insertLogin(userId) {
+    return request('/logins', {
+      method: 'POST',
+      headers: { Prefer: 'return=representation' },
+      body: { user_id: userId, login_at: new Date().toISOString() },
+    }).then((rows) => rows[0] || null);
+  },
+
+  loginHistory(userId, limit = 10) {
+    return request(`/logins?user_id=eq.${q(userId)}&order=id.desc&limit=${q(limit)}`).then(
+      (rows) => rows || []
+    );
   },
 
   insertOtp({ userId, codeHash, channel, expiresAt }) {

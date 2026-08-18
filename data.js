@@ -37,8 +37,34 @@ async function createUser({ firstName, lastName, email, mobile, password }) {
 
 async function markUserVerified(id) {
   if (DRIVER === 'supabase') return supabase.markUserVerified(id);
-  sqlite.userStmts.verify.run(id);
+  sqlite.userStmts.verify.run(new Date().toISOString(), id);
   return findUserById(id);
+}
+
+async function updateLastLogin(id) {
+  if (DRIVER === 'supabase') return supabase.updateLastLogin(id);
+  sqlite.userStmts.updateLastLogin.run(new Date().toISOString(), id);
+  return findUserById(id);
+}
+
+async function deleteUser(id) {
+  if (DRIVER === 'supabase') return supabase.deleteUser(id);
+  sqlite.userStmts.delete.run(id);
+}
+
+async function insertLogin(userId) {
+  if (DRIVER === 'supabase') return supabase.insertLogin(userId);
+  sqlite.loginStmts.insert.run(userId, new Date().toISOString());
+}
+
+async function recordLogin(userId) {
+  await insertLogin(userId);
+  await updateLastLogin(userId);
+}
+
+async function loginHistory(userId, limit = 10) {
+  if (DRIVER === 'supabase') return supabase.loginHistory(userId, limit);
+  return sqlite.loginStmts.history.all(userId, limit);
 }
 
 async function insertOtp({ userId, codeHash, channel, expiresAt }) {
@@ -94,6 +120,11 @@ module.exports = {
   findUserByIdentifier,
   createUser,
   markUserVerified,
+  updateLastLogin,
+  deleteUser,
+  insertLogin,
+  recordLogin,
+  loginHistory,
   insertOtp,
   latestActiveOtp,
   markOtpUsed,

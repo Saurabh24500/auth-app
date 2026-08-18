@@ -261,6 +261,43 @@ input.input-error {
 
 .hint.show { display: block; }
 
+.section-title {
+  font-size: 14px;
+  color: var(--muted);
+  margin: 20px 0 10px;
+  text-align: left;
+}
+
+.login-list {
+  list-style: none;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 24px;
+}
+
+.login-list li {
+  padding: 10px 16px;
+  font-size: 13px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  color: var(--text);
+}
+
+.login-list li:last-child { border-bottom: none; }
+.login-empty { color: var(--muted); }
+
+.btn-danger {
+  background: transparent;
+  color: var(--danger);
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  margin-top: 10px;
+}
+
+.btn-danger:hover { background: rgba(239, 68, 68, 0.12); border-color: var(--danger); color: #fca5a5; }
+
 .spinner {
   display: inline-block;
   width: 16px;

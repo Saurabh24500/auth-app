@@ -18,14 +18,29 @@
       <div class="info-row"><span>Last name</span><b id="dLast">-</b></div>
       <div class="info-row"><span>Email</span><b id="dEmail">-</b></div>
       <div class="info-row"><span>Mobile</span><b id="dMobile">-</b></div>
+      <div class="info-row"><span>Joined</span><b id="dJoined">-</b></div>
+      <div class="info-row"><span>Last login</span><b id="dLastLogin">-</b></div>
       <div class="info-row"><span>Status</span><span class="badge">Verified</span></div>
     </div>
 
-    <button class="btn btn-outline" id="logoutBtn">Log out</button>
+    <h3 class="section-title">Login history (last 10)</h3>
+    <ul class="login-list" id="loginList">
+      <li class="login-empty">No logins yet.</li>
+    </ul>
+
+    <button class="btn" id="logoutBtn">Log out</button>
+    <button class="btn btn-danger" id="deleteBtn">Delete my account</button>
   </div>
 
   <script src="app.js"></script>
   <script>
+    function fmtDate(value) {
+      if (!value) return '-';
+      const d = new Date(value);
+      if (isNaN(d)) return value;
+      return d.toLocaleString();
+    }
+
     (async () => {
       const res = await fetch('/api/me');
       const me = await res.json();
@@ -39,11 +54,37 @@
       $id('dLast').textContent = me.lastName;
       $id('dEmail').textContent = me.email || '-';
       $id('dMobile').textContent = me.mobile || '-';
+      $id('dJoined').textContent = fmtDate(me.createdAt);
+      $id('dLastLogin').textContent = fmtDate(me.lastLoginAt);
+
+      const hr = await fetch('/api/login-history');
+      const hist = await hr.json();
+      const list = $id('loginList');
+      if (hist.ok && hist.history.length) {
+        list.innerHTML = '';
+        hist.history.forEach((row) => {
+          const li = document.createElement('li');
+          li.textContent = fmtDate(row.login_at);
+          list.appendChild(li);
+        });
+      }
     })();
 
     $id('logoutBtn').addEventListener('click', async () => {
       await api('/api/logout', {});
       window.location.href = '/login';
+    });
+
+    $id('deleteBtn').addEventListener('click', async () => {
+      if (!confirm('Delete your account permanently? This cannot be undone.')) return;
+      $id('deleteBtn').disabled = true;
+      const data = await api('/api/delete-account', {});
+      if (data.ok) {
+        window.location.href = '/register';
+      } else {
+        showMsg('error', data.error || 'Failed to delete account.');
+        $id('deleteBtn').disabled = false;
+      }
     });
   </script>
 </body>
