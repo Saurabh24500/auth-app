@@ -28,6 +28,8 @@ A production-ready authentication system that keeps bots out and real users in:
 | ⏳ **OTP hardening** | 10-min expiry, hashed storage, 60s resend cooldown, max 3 sends, **5 wrong attempts = code burned** |
 | 🚫 **Brute-force lockout** | 5 failed logins = account locked 15 minutes |
 | 🗄️ **Supabase storage** | Login details stored in cloud Postgres — auto-falls back to SQLite if unconfigured |
+| 🕒 **Full audit trail** | Tracks every login (timestamps per login in `logins` table) + `verified_at` / `last_login_at`, shown on the dashboard |
+| 🗑️ **Delete account** | Users can permanently delete their own account (cascades OTPs + login history) |
 | 🔐 **Session security** | Regenerated session IDs (no fixation), httpOnly + secure cookies, security headers, bcrypt password hashing |
 
 ## 🚀 Quick start
@@ -51,7 +53,7 @@ npm start                 # → http://localhost:3000
 - `/login` — email/mobile + password, auto-OTP for unverified accounts
 - `/register` — full signup flow (names, contact, captcha, strong password)
 - `/verify` — 6-digit OTP entry with resend countdown
-- `/dashboard` — logged-in profile view (name, email, mobile, verified badge)
+- `/dashboard` — logged-in profile view (name, email, mobile, verified badge) + **login history** + **delete account**
 
 ## 🔧 Environment variables (`.env`)
 
@@ -83,12 +85,14 @@ npm start                 # → http://localhost:3000
 | `POST` | `/api/login` | Log in (OTP sent if unverified) |
 | `POST` | `/api/logout` | End session |
 | `GET` | `/api/me` | Current user |
+| `GET` | `/api/login-history` | Last 10 logins for the current user |
+| `POST` | `/api/delete-account` | Permanently delete the current user's account |
 
 ## 🧪 Tested
 
 Full **end-to-end + adversarial** suite passed against the live Supabase database:
 
-✅ register → captcha → OTP → verify → login &nbsp;·&nbsp; ✅ wrong captcha rejected &nbsp;·&nbsp; ✅ weak passwords rejected &nbsp;·&nbsp; ✅ OTP brute-force blocked (code burned after 5) &nbsp;·&nbsp; ✅ 60s resend cooldown &nbsp;·&nbsp; ✅ duplicate account → 409 &nbsp;·&nbsp; ✅ logout clears session &nbsp;·&nbsp; ✅ login lockout after 5 fails &nbsp;·&nbsp; ✅ fresh login
+✅ register → captcha → OTP → verify → login &nbsp;·&nbsp; ✅ wrong captcha rejected &nbsp;·&nbsp; ✅ weak passwords rejected &nbsp;·&nbsp; ✅ OTP brute-force blocked (code burned after 5) &nbsp;·&nbsp; ✅ 60s resend cooldown &nbsp;·&nbsp; ✅ duplicate account → 409 &nbsp;·&nbsp; ✅ logout clears session &nbsp;·&nbsp; ✅ login lockout after 5 fails &nbsp;·&nbsp; ✅ fresh login &nbsp;·&nbsp; ✅ login history + verified_at/last_login_at recorded &nbsp;·&nbsp; ✅ account deletion (cascades OTPs + history)
 
 ## 📦 Deploy to Render (free)
 
