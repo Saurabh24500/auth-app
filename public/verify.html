@@ -9,10 +9,11 @@
 <body>
   <div class="card">
     <h1>Verify it's you</h1>
-    <p class="subtitle">Enter the 6-digit code sent to <span id="destLabel">your email or phone</span>.</p>
+    <p class="subtitle" id="subtitle">Enter the 6-digit code sent to <span id="destLabel">your email or phone</span>.</p>
     <div id="msg" class="msg"></div>
 
     <div class="otp-box" id="otpBox"></div>
+    <div id="fbRecaptcha" style="display:none"></div>
 
     <button class="btn" id="verifyBtn" style="margin-top:20px">Verify</button>
 
@@ -24,8 +25,13 @@
   </div>
 
   <script src="app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="firebase-client.js"></script>
   <script>
     let countdownTimer = null;
+    let flow = 'email';
+    let pending = null;
 
     const inputs = Array.from({ length: 6 }, () => {
       const el = document.createElement('input');
@@ -51,7 +57,7 @@
       return inputs.map((i) => i.value).join('');
     }
 
-    async function startResendTimer(seconds) {
+    function startResendTimer(seconds) {
       clearInterval(countdownTimer);
       const link = $id('resendLink');
       let remaining = seconds;
@@ -69,13 +75,71 @@
       }, 1000);
     }
 
-    $id('verifyBtn').addEventListener('click', async () => {
+    function resetOtpBox() {
+      inputs.forEach((i) => (i.value = ''));
+      inputs[0].focus();
+    }
+
+    async function startFirebaseSms() {
+      hideMsg();
+      const link = $id('resendLink');
+      link.style.pointerEvents = 'none';
+      link.textContent = 'Sending code...';
+      try {
+        await sendFirebaseCode(pending.destination, 'fbRecaptcha');
+        showMsg('success', 'SMS sent to ' + pending.masked + '. Enter the 6-digit code.');
+        startResendTimer(60);
+        resetOtpBox();
+      } catch (err) {
+        let message = err && err.code === 'auth/captcha-check-failed'
+          ? 'Captcha verification failed. Please try again.'
+          : 'Failed to send SMS. Check the phone number and try again.';
+        if (err && (err.code === 'auth/invalid-phone-number' || err.code === 'auth/missing-phone-number')) {
+          message = 'Invalid phone number. Please re-register with a correct number.';
+        }
+        showMsg('error', message);
+        link.style.pointerEvents = '';
+        link.textContent = 'Resend code';
+      }
+    }
+
+    async function verifyViaFirebase() {
+      hideMsg();
+      const btn = $id('verifyBtn');
+      setLoading(btn, true);
+      try {
+        const result = getFbResult();
+        if (!result) throw new Error('No pending SMS.');
+        const idToken = await confirmFirebaseCode(result, getOtp());
+        const data = await api('/api/firebase/verify-token', { idToken });
+        if (data.ok) {
+          sessionStorage.removeItem('otpFlow');
+          showMsg('success', 'Verified! Welcome, ' + data.name + '.');
+          setTimeout(() => { window.location.href = '/dashboard'; }, 900);
+        } else {
+          showMsg('error', data.error);
+        }
+      } catch (err) {
+        let message = 'Network error. Please try again.';
+        if (err && (err.code === 'auth/invalid-verification-code' || err.code === 'auth/code-expired')) {
+          message = 'Incorrect or expired code.';
+        } else if (err && err.code === 'auth/session-expired') {
+          message = 'Code expired. Resend a new code.';
+        }
+        showMsg('error', message);
+      } finally {
+        setLoading(btn, false);
+      }
+    }
+
+    async function verifyViaEmail() {
       hideMsg();
       const btn = $id('verifyBtn');
       setLoading(btn, true);
       try {
         const data = await api('/api/verify-otp', { otp: getOtp() });
         if (data.ok) {
+          sessionStorage.removeItem('otpFlow');
           showMsg('success', 'Verified! Welcome, ' + data.name + '.');
           setTimeout(() => { window.location.href = '/dashboard'; }, 900);
         } else {
@@ -86,10 +150,19 @@
       } finally {
         setLoading(btn, false);
       }
+    }
+
+    $id('verifyBtn').addEventListener('click', () => {
+      if (flow === 'firebase') verifyViaFirebase();
+      else verifyViaEmail();
     });
 
     $id('resendLink').addEventListener('click', async () => {
       hideMsg();
+      if (flow === 'firebase') {
+        await startFirebaseSms();
+        return;
+      }
       try {
         const data = await api('/api/resend-otp', {});
         if (data.ok) {
@@ -110,10 +183,28 @@
         window.location.href = '/dashboard';
         return;
       }
-      const dest = sessionStorage.getItem('otpDest');
-      if (dest) $id('destLabel').textContent = dest;
-      startResendTimer(60);
-      inputs[0].focus();
+
+      const pr = await fetch('/api/pending');
+      pending = await pr.json();
+      if (!pending.ok) {
+        window.location.href = '/login';
+        return;
+      }
+
+      flow = pending.firebase ? 'firebase' : 'email';
+      $id('destLabel').textContent = pending.masked;
+      $id('subtitle').textContent = flow === 'firebase'
+        ? 'Enter the 6-digit code sent by SMS to'
+        : 'Enter the 6-digit code sent to';
+
+      if (flow === 'firebase') {
+        startResendTimer(60);
+        resetOtpBox();
+        await startFirebaseSms();
+      } else {
+        startResendTimer(60);
+        inputs[0].focus();
+      }
     })();
   </script>
 </body>

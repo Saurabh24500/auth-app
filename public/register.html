@@ -123,6 +123,7 @@
         const data = await api('/api/register', payload);
         if (data.ok) {
           sessionStorage.setItem('otpDest', data.masked);
+          sessionStorage.setItem('otpFlow', data.firebase ? 'firebase' : 'email');
           showMsg('success', 'Account created. A verification code was sent to ' + data.masked + '.');
           setTimeout(() => { window.location.href = '/verify'; }, 900);
         } else {

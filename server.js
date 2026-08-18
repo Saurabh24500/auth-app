@@ -16,8 +16,8 @@ const {
 } = require('./validators');
 const { generateChallenge, svgCaptcha } = require('./captcha');
 const { sendOtpEmail } = require('./mailer');
-const { sendOtpSms } = require('./sms');
 const supabase = require('./supabase');
+const firebase = require('./firebase');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -84,7 +84,7 @@ function cleanupCaptchas() {
   }
 }
 
-async function issueOtp(user, channel, destination) {
+async function issueOtp(user, destination) {
   const now = Date.now();
   const log = otpSendLog.get(user.id) || { count: 0, lastSentAt: 0 };
   if (now - log.lastSentAt < 60 * 1000) {
@@ -98,21 +98,17 @@ async function issueOtp(user, channel, destination) {
     throw err;
   }
   otpSendLog.set(user.id, { count: log.count + 1, lastSentAt: now });
-  otpAttempts.delete(`${user.id}:${channel}`);
+  otpAttempts.delete(`${user.id}:email`);
 
   const otp = generateOtp();
   await data.insertOtp({
     userId: user.id,
     codeHash: hashCode(`${user.id}:${otp}`),
-    channel,
+    channel: 'email',
     expiresAt: new Date(Date.now() + OTP_TTL_MS).toISOString(),
   });
 
-  if (channel === 'email') {
-    await sendOtpEmail(destination, otp, `${user.first_name} ${user.last_name}`);
-  } else {
-    await sendOtpSms(destination, otp);
-  }
+  await sendOtpEmail(destination, otp, `${user.first_name} ${user.last_name}`);
 }
 
 app.post('/api/captcha', (req, res) => {
@@ -186,6 +182,7 @@ app.post('/api/register', async (req, res) => {
 
     const channel = emailVal ? 'email' : 'sms';
     const destination = emailVal || mobileVal;
+    const firebaseSms = channel === 'sms';
 
     if (emailVal && mobileVal) {
       await emailDomainHasMailServer(emailVal).then((hasMx) => {
@@ -195,7 +192,14 @@ app.post('/api/register', async (req, res) => {
       }).catch(() => {});
     }
 
-    await issueOtp(user, channel, destination);
+    if (channel === 'email') {
+      await issueOtp(user, destination);
+    } else if (!firebase.isConfigured()) {
+      return res.status(400).json({
+        ok: false,
+        error: 'SMS verification is not configured yet. Use an email address or set up Firebase.',
+      });
+    }
 
     await regenerateSession(req);
     req.session.pendingUserId = user.id;
@@ -205,6 +209,7 @@ app.post('/api/register', async (req, res) => {
     res.json({
       ok: true,
       channel,
+      firebase: firebaseSms,
       masked: maskIdentifier(destination),
       name: `${user.first_name} ${user.last_name}`,
     });
@@ -225,10 +230,15 @@ app.post('/api/resend-otp', async (req, res) => {
 
     const channel = req.session.otpChannel || (user.email ? 'email' : 'sms');
     const destination = req.session.otpDestination || (user.email ? user.email : user.mobile);
-    await issueOtp(user, channel, destination);
+
+    if (channel === 'sms') {
+      return res.json({ ok: true, channel: 'sms', firebase: true, masked: maskIdentifier(destination) });
+    }
+
+    await issueOtp(user, destination);
     req.session.otpChannel = channel;
     req.session.otpDestination = destination;
-    res.json({ ok: true, channel, masked: maskIdentifier(destination) });
+    res.json({ ok: true, channel, firebase: false, masked: maskIdentifier(destination) });
   } catch (err) {
     const status = err.status || 500;
     if (status === 500) console.error(err);
@@ -318,10 +328,19 @@ app.post('/api/login', async (req, res) => {
       req.session.pendingUserId = user.id;
       const channel = user.email ? 'email' : 'sms';
       const destination = user.email ? user.email : user.mobile;
+
+      if (channel === 'email') {
+        await issueOtp(user, destination);
+      } else if (!firebase.isConfigured()) {
+        return res.status(400).json({
+          ok: false,
+          error: 'SMS verification is not configured yet. Use an email address or set up Firebase.',
+        });
+      }
+
       req.session.otpChannel = channel;
       req.session.otpDestination = destination;
-      await issueOtp(user, channel, destination);
-      return res.json({ ok: true, needOtp: true, channel, masked: maskIdentifier(destination) });
+      return res.json({ ok: true, needOtp: true, channel, firebase: channel === 'sms', masked: maskIdentifier(destination) });
     }
 
     await regenerateSession(req);
@@ -349,6 +368,58 @@ app.get('/api/me', async (req, res) => {
     mobile: user.mobile,
     verified: !!user.verified,
   });
+});
+
+app.get('/api/pending', (req, res) => {
+  if (!req.session.pendingUserId) return res.json({ ok: false });
+  const destination = req.session.otpDestination || '';
+  res.json({
+    ok: true,
+    channel: req.session.otpChannel || 'email',
+    destination,
+    firebase: (req.session.otpChannel || 'email') === 'sms',
+    masked: maskIdentifier(destination),
+  });
+});
+
+app.get('/api/firebase/config', (req, res) => {
+  if (!firebase.isConfigured()) return res.json({ ok: false, error: 'Firebase is not configured.' });
+  res.json({ ok: true, ...firebase.webConfig() });
+});
+
+app.post('/api/firebase/verify-token', async (req, res) => {
+  const { idToken } = req.body;
+  if (!idToken) return res.status(400).json({ ok: false, error: 'Missing verification token.' });
+
+  let decoded;
+  try {
+    decoded = await firebase.verifyIdToken(idToken);
+  } catch (err) {
+    return res.status(400).json({ ok: false, error: 'Invalid verification token.' });
+  }
+
+  const phone = decoded.phone_number;
+  if (!phone) return res.status(400).json({ ok: false, error: 'Token has no phone number.' });
+
+  const user = await data.findUserByMobile(phone);
+  if (!user) return res.status(400).json({ ok: false, error: 'No account found for this phone number.' });
+
+  const expected = req.session.otpDestination || user.mobile;
+  if (req.session.pendingUserId && user.id !== req.session.pendingUserId) {
+    return res.status(409).json({ ok: false, error: 'Phone number does not match your pending verification.' });
+  }
+  if (req.session.otpChannel && req.session.otpChannel !== 'sms') {
+    return res.status(409).json({ ok: false, error: 'This session is not pending SMS verification.' });
+  }
+  if (String(expected).replace(/\s+/g, '') !== String(phone).replace(/\s+/g, '')) {
+    return res.status(409).json({ ok: false, error: 'Phone number does not match the registered number.' });
+  }
+
+  await data.markUserVerified(user.id);
+  await regenerateSession(req);
+  req.session.userId = user.id;
+  delete req.session.pendingUserId;
+  res.json({ ok: true, name: `${user.first_name} ${user.last_name}` });
 });
 
 function requireAuth(req, res, next) {
@@ -382,7 +453,12 @@ app.listen(PORT, async () => {
   }
 
   console.log('  Pages: /login  /register  /verify  /dashboard\n');
-  if (!process.env.SMTP_HOST && !process.env.TWILIO_ACCOUNT_SID) {
-    console.log('  NOTE: No SMTP/Twilio configured - OTPs are printed to this console.\n');
+  if (!process.env.SMTP_HOST) {
+    console.log('  NOTE: No SMTP configured - email OTPs are printed to this console.\n');
+  }
+  if (!firebase.isConfigured()) {
+    console.log('  NOTE: Firebase not configured - SMS verification is disabled.\n');
+  } else {
+    console.log('  SMS verification: Firebase Phone Auth (free tier)\n');
   }
 });
