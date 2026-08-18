@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Create Account</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="card">
+    <h1>Create account</h1>
+    <p class="subtitle">Fill in your details to get started.</p>
+    <div id="msg" class="msg"></div>
+
+    <form id="registerForm" novalidate>
+      <div class="row">
+        <div class="field">
+          <label for="firstName">First name</label>
+          <input type="text" id="firstName" autocomplete="given-name" required />
+        </div>
+        <div class="field">
+          <label for="lastName">Last name</label>
+          <input type="text" id="lastName" autocomplete="family-name" required />
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="email">Email <span class="optional">(or mobile below)</span></label>
+        <input type="email" id="email" autocomplete="email" placeholder="you@example.com" />
+      </div>
+
+      <div class="field">
+        <label for="mobile">Mobile <span class="optional">(with country code)</span></label>
+        <input type="tel" id="mobile" autocomplete="tel" placeholder="+91 9876543210" />
+      </div>
+
+      <div class="field">
+        <label for="captcha">Are you human? Solve the math captcha</label>
+        <div class="captcha-row">
+          <div class="captcha-svg" id="captchaBox"></div>
+          <button type="button" class="captcha-refresh" id="captchaRefresh" title="Refresh captcha" aria-label="Refresh captcha">&#x21bb;</button>
+        </div>
+        <input type="number" id="captchaInput" placeholder="Your answer" style="margin-top:10px" />
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label for="password">Password</label>
+          <input type="password" id="password" autocomplete="new-password" required />
+        </div>
+        <div class="field">
+          <label for="confirmPassword">Confirm password</label>
+          <input type="password" id="confirmPassword" autocomplete="new-password" required />
+        </div>
+      </div>
+
+      <div class="meter"><div class="meter-fill" id="meterFill"></div></div>
+      <div class="checklist" id="checklist">
+        <span id="cLen">&#10007; 6+ characters</span>
+        <span id="cUpper">&#10007; Uppercase (A-Z)</span>
+        <span id="cLower">&#10007; Lowercase (a-z)</span>
+        <span id="cDigit">&#10007; Digit (0-9)</span>
+        <span id="cSpecial">&#10007; Special character (!@#$%)</span>
+      </div>
+
+      <button type="submit" class="btn" id="submitBtn" style="margin-top:18px">Create account</button>
+    </form>
+
+    <p class="switch-line">Already have an account? <a href="/login">Log in</a></p>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    let captchaId = null;
+
+    async function loadCaptcha() {
+      const res = await fetch('/api/captcha', { method: 'POST' });
+      const data = await res.json();
+      captchaId = data.id;
+      $id('captchaBox').innerHTML = data.svg;
+      $id('captchaInput').value = '';
+    }
+
+    function updatePasswordUI() {
+      const pw = $id('password').value;
+      const checks = getPasswordChecks(pw);
+      const items = {
+        cLen: checks.len, cUpper: checks.upper, cLower: checks.lower,
+        cDigit: checks.digit, cSpecial: checks.special,
+      };
+      for (const [id, ok] of Object.entries(items)) {
+        const el = $id(id);
+        el.className = ok ? 'ok' : 'bad';
+        el.innerHTML = (ok ? '&#10003; ' : '&#10007; ') + el.textContent.replace(/^[\s\S]*?\u2713\s*|^[\s\S]*?\u2717\s*/, '');
+      }
+      const score = Object.values(checks).filter(Boolean).length;
+      const fill = $id('meterFill');
+      fill.style.width = (score / 5) * 100 + '%';
+      fill.className = 'meter-fill ' + (score <= 2 ? 'weak' : score <= 4 ? 'fair' : 'strong');
+    }
+
+    $id('password').addEventListener('input', updatePasswordUI);
+    $id('captchaRefresh').addEventListener('click', loadCaptcha);
+
+    $id('registerForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      hideMsg();
+      const btn = $id('submitBtn');
+      setLoading(btn, true);
+
+      const payload = {
+        firstName: $id('firstName').value,
+        lastName: $id('lastName').value,
+        email: $id('email').value,
+        mobile: $id('mobile').value,
+        password: $id('password').value,
+        confirmPassword: $id('confirmPassword').value,
+        captchaId,
+        captchaAnswer: $id('captchaInput').value,
+      };
+
+      try {
+        const data = await api('/api/register', payload);
+        if (data.ok) {
+          sessionStorage.setItem('otpDest', data.masked);
+          showMsg('success', 'Account created. A verification code was sent to ' + data.masked + '.');
+          setTimeout(() => { window.location.href = '/verify'; }, 900);
+        } else {
+          showMsg('error', data.error);
+          loadCaptcha();
+        }
+      } catch {
+        showMsg('error', 'Network error. Please try again.');
+        loadCaptcha();
+      } finally {
+        setLoading(btn, false);
+      }
+    });
+
+    loadCaptcha();
+  </script>
+</body>
+</html>

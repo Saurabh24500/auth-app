@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Log In</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="card">
+    <h1>Welcome back</h1>
+    <p class="subtitle">Log in with your email or mobile number.</p>
+    <div id="msg" class="msg"></div>
+
+    <form id="loginForm" novalidate>
+      <div class="field">
+        <label for="identifier">Email or mobile</label>
+        <input type="text" id="identifier" autocomplete="username" placeholder="you@example.com or +919876543210" required />
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input type="password" id="password" autocomplete="current-password" required />
+      </div>
+      <button type="submit" class="btn" id="submitBtn">Log in</button>
+    </form>
+
+    <p class="switch-line">New here? <a href="/register">Create an account</a></p>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    if (sessionStorage.getItem('justRegistered')) {
+      sessionStorage.removeItem('justRegistered');
+    }
+
+    $id('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      hideMsg();
+      const btn = $id('submitBtn');
+      setLoading(btn, true);
+
+      try {
+        const data = await api('/api/login', {
+          identifier: $id('identifier').value,
+          password: $id('password').value,
+        });
+        if (data.ok && data.needOtp) {
+          sessionStorage.setItem('otpDest', data.masked);
+          showMsg('success', 'You must verify your account. A code was sent to ' + data.masked + '.');
+          setTimeout(() => { window.location.href = '/verify'; }, 900);
+        } else if (data.ok) {
+          window.location.href = '/dashboard';
+        } else {
+          showMsg('error', data.error);
+        }
+      } catch {
+        showMsg('error', 'Network error. Please try again.');
+      } finally {
+        setLoading(btn, false);
+      }
+    });
+  </script>
+</body>
+</html>

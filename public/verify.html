@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Verify Your Account</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="card">
+    <h1>Verify it's you</h1>
+    <p class="subtitle">Enter the 6-digit code sent to <span id="destLabel">your email or phone</span>.</p>
+    <div id="msg" class="msg"></div>
+
+    <div class="otp-box" id="otpBox"></div>
+
+    <button class="btn" id="verifyBtn" style="margin-top:20px">Verify</button>
+
+    <p class="resend" id="resendLine">
+      Didn't get the code? <a id="resendLink">Resend code</a>
+    </p>
+
+    <p class="switch-line"><a href="/login">Back to log in</a></p>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    let countdownTimer = null;
+
+    const inputs = Array.from({ length: 6 }, () => {
+      const el = document.createElement('input');
+      el.type = 'text';
+      el.inputMode = 'numeric';
+      el.maxLength = 1;
+      el.setAttribute('autocomplete', 'one-time-code');
+      el.addEventListener('input', () => {
+        el.value = el.value.replace(/[^0-9]/g, '');
+        if (el.value && el.nextElementSibling) el.nextElementSibling.focus();
+      });
+      el.addEventListener('keydown', (e) => {
+        if (e.key === 'Backspace' && !el.value && el.previousElementSibling) {
+          el.previousElementSibling.focus();
+        }
+      });
+      return el;
+    });
+    const box = $id('otpBox');
+    inputs.forEach((i) => box.appendChild(i));
+
+    function getOtp() {
+      return inputs.map((i) => i.value).join('');
+    }
+
+    async function startResendTimer(seconds) {
+      clearInterval(countdownTimer);
+      const link = $id('resendLink');
+      let remaining = seconds;
+      link.style.pointerEvents = 'none';
+      link.textContent = 'Resend code in ' + remaining + 's';
+      countdownTimer = setInterval(() => {
+        remaining -= 1;
+        if (remaining <= 0) {
+          clearInterval(countdownTimer);
+          link.style.pointerEvents = '';
+          link.textContent = 'Resend code';
+        } else {
+          link.textContent = 'Resend code in ' + remaining + 's';
+        }
+      }, 1000);
+    }
+
+    $id('verifyBtn').addEventListener('click', async () => {
+      hideMsg();
+      const btn = $id('verifyBtn');
+      setLoading(btn, true);
+      try {
+        const data = await api('/api/verify-otp', { otp: getOtp() });
+        if (data.ok) {
+          showMsg('success', 'Verified! Welcome, ' + data.name + '.');
+          setTimeout(() => { window.location.href = '/dashboard'; }, 900);
+        } else {
+          showMsg('error', data.error);
+        }
+      } catch {
+        showMsg('error', 'Network error. Please try again.');
+      } finally {
+        setLoading(btn, false);
+      }
+    });
+
+    $id('resendLink').addEventListener('click', async () => {
+      hideMsg();
+      try {
+        const data = await api('/api/resend-otp', {});
+        if (data.ok) {
+          showMsg('success', 'A new code was sent to ' + data.masked + '.');
+          startResendTimer(60);
+        } else {
+          showMsg('error', data.error);
+        }
+      } catch {
+        showMsg('error', 'Network error. Please try again.');
+      }
+    });
+
+    (async () => {
+      const res = await fetch('/api/me');
+      const me = await res.json();
+      if (me.ok && me.verified) {
+        window.location.href = '/dashboard';
+        return;
+      }
+      const dest = sessionStorage.getItem('otpDest');
+      if (dest) $id('destLabel').textContent = dest;
+      startResendTimer(60);
+      inputs[0].focus();
+    })();
+  </script>
+</body>
+</html>

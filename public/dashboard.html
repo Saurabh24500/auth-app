@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="card dashboard">
+    <div class="avatar" id="avatar">?</div>
+    <h1 id="welcome">Welcome</h1>
+    <p class="subtitle">Your account is fully verified.</p>
+    <div id="msg" class="msg"></div>
+
+    <div class="info-grid">
+      <div class="info-row"><span>First name</span><b id="dFirst">-</b></div>
+      <div class="info-row"><span>Last name</span><b id="dLast">-</b></div>
+      <div class="info-row"><span>Email</span><b id="dEmail">-</b></div>
+      <div class="info-row"><span>Mobile</span><b id="dMobile">-</b></div>
+      <div class="info-row"><span>Status</span><span class="badge">Verified</span></div>
+    </div>
+
+    <button class="btn btn-outline" id="logoutBtn">Log out</button>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    (async () => {
+      const res = await fetch('/api/me');
+      const me = await res.json();
+      if (!me.ok) {
+        window.location.href = '/login';
+        return;
+      }
+      $id('welcome').textContent = 'Welcome, ' + me.firstName + '!';
+      $id('avatar').textContent = (me.firstName[0] + me.lastName[0]).toUpperCase();
+      $id('dFirst').textContent = me.firstName;
+      $id('dLast').textContent = me.lastName;
+      $id('dEmail').textContent = me.email || '-';
+      $id('dMobile').textContent = me.mobile || '-';
+    })();
+
+    $id('logoutBtn').addEventListener('click', async () => {
+      await api('/api/logout', {});
+      window.location.href = '/login';
+    });
+  </script>
+</body>
+</html>

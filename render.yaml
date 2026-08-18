@@ -1,0 +1,36 @@
+# Render deployment config (free web service)
+# Create a GitHub repo, push this project, then in Render:
+#   New -> Web Service -> connect repo -> Render uses this file automatically.
+services:
+  - type: web
+    name: auth-app
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: SUPABASE_URL
+        value: https://fjwvrrvyisatbjsjfcok.supabase.co
+      # Set these manually in Render -> Environment (hidden, not in repo):
+      - key: SUPABASE_SECRET_KEY
+        sync: false
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: 587
+      - key: SMTP_SECURE
+        value: "false"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_FROM_NUMBER
+        sync: false
