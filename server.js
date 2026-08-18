@@ -20,13 +20,25 @@ const { sendOtpSms } = require('./sms');
 const supabase = require('./supabase');
 
 const app = express();
+app.set('trust proxy', 1);
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  next();
+});
 app.use(express.json());
 app.use(
   session({
     secret: process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex'),
     resave: false,
     saveUninitialized: true,
-    cookie: { httpOnly: true, sameSite: 'lax', maxAge: 1000 * 60 * 60 * 24 },
+    cookie: {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 1000 * 60 * 60 * 24,
+    },
   })
 );
 
@@ -38,9 +50,17 @@ const OTP_TTL_MS = 10 * 60 * 1000;
 const CAPTCHA_TTL_MS = 5 * 60 * 1000;
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOCK_MS = 15 * 60 * 1000;
+const MAX_OTP_ATTEMPTS = 5;
 
 const captchaStore = new Map();
 const otpSendLog = new Map(); // userId -> { count, lastSentAt }
+const otpAttempts = new Map(); // `userId:channel` -> { count, resetAt }
+
+function regenerateSession(req) {
+  return new Promise((resolve, reject) => {
+    req.session.regenerate((err) => (err ? reject(err) : resolve()));
+  });
+}
 
 function hashCode(code) {
   return crypto.createHash('sha256').update(String(code)).digest('hex');
@@ -78,6 +98,7 @@ async function issueOtp(user, channel, destination) {
     throw err;
   }
   otpSendLog.set(user.id, { count: log.count + 1, lastSentAt: now });
+  otpAttempts.delete(`${user.id}:${channel}`);
 
   const otp = generateOtp();
   await data.insertOtp({
@@ -176,6 +197,7 @@ app.post('/api/register', async (req, res) => {
 
     await issueOtp(user, channel, destination);
 
+    await regenerateSession(req);
     req.session.pendingUserId = user.id;
     req.session.otpChannel = channel;
     req.session.otpDestination = destination;
@@ -229,14 +251,27 @@ app.post('/api/verify-otp', async (req, res) => {
     return res.status(400).json({ ok: false, error: 'Code is invalid or expired. Request a new one.' });
   }
 
+  const key = `${userId}:${channel}`;
+  const attempt = otpAttempts.get(key) || { count: 0, resetAt: 0 };
+  if (attempt.count >= MAX_OTP_ATTEMPTS && Date.now() < attempt.resetAt) {
+    await data.markOtpUsed(row.id);
+    return res.status(429).json({ ok: false, error: 'Too many wrong attempts. Request a new code.' });
+  }
+
   const expected = hashCode(`${userId}:${String(otp)}`);
   if (row.code_hash !== expected) {
+    attempt.count += 1;
+    attempt.resetAt = Date.now() + OTP_TTL_MS;
+    otpAttempts.set(key, attempt);
+    if (attempt.count >= MAX_OTP_ATTEMPTS) await data.markOtpUsed(row.id);
     return res.status(400).json({ ok: false, error: 'Incorrect code.' });
   }
 
+  otpAttempts.delete(key);
   await data.markOtpUsed(row.id);
   await data.markUserVerified(userId);
 
+  await regenerateSession(req);
   req.session.userId = userId;
   delete req.session.pendingUserId;
   const user = await data.findUserById(userId);
@@ -279,6 +314,7 @@ app.post('/api/login', async (req, res) => {
     await data.clearLoginAttempt(key);
 
     if (!user.verified) {
+      await regenerateSession(req);
       req.session.pendingUserId = user.id;
       const channel = user.email ? 'email' : 'sms';
       const destination = user.email ? user.email : user.mobile;
@@ -288,6 +324,7 @@ app.post('/api/login', async (req, res) => {
       return res.json({ ok: true, needOtp: true, channel, masked: maskIdentifier(destination) });
     }
 
+    await regenerateSession(req);
     req.session.userId = user.id;
     res.json({ ok: true, name: `${user.first_name} ${user.last_name}` });
   } catch (err) {

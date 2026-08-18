@@ -31,6 +31,9 @@ async function sendOtpEmail(to, otp, name) {
       subject,
       html,
     });
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`\n[EMAIL OTP] To: ${to} | Code: ${otp}\n`);
+    }
     return 'email';
   }
 
