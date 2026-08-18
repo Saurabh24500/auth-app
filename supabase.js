@@ -121,6 +121,14 @@ module.exports = {
     }).then((rows) => rows[0] || null);
   },
 
+  updatePassword(id, passwordHash) {
+    return request(`/users?id=eq.${q(id)}`, {
+      method: 'PATCH',
+      headers: { Prefer: 'return=representation' },
+      body: { password_hash: passwordHash },
+    }).then((rows) => rows[0] || null);
+  },
+
   deleteUser(id) {
     return request(`/users?id=eq.${q(id)}`, { method: 'DELETE' });
   },

@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reset Password</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="card">
+    <h1>Set a new password</h1>
+    <p class="subtitle">Enter the 6-digit code we emailed you, then choose a new password.</p>
+    <div id="msg" class="msg"></div>
+
+    <div class="otp-box" id="otpBox"></div>
+
+    <div class="field" style="margin-top:20px">
+      <label for="password">New password</label>
+      <input type="password" id="password" autocomplete="new-password" required />
+    </div>
+    <div class="field">
+      <label for="confirmPassword">Confirm new password</label>
+      <input type="password" id="confirmPassword" autocomplete="new-password" required />
+    </div>
+
+    <div class="meter"><div class="meter-fill" id="meterFill"></div></div>
+    <div class="checklist" id="checklist">
+      <span id="cLen">&#10007; 6+ characters</span>
+      <span id="cUpper">&#10007; Uppercase (A-Z)</span>
+      <span id="cLower">&#10007; Lowercase (a-z)</span>
+      <span id="cDigit">&#10007; Digit (0-9)</span>
+      <span id="cSpecial">&#10007; Special character (!@#$%)</span>
+    </div>
+
+    <button class="btn" id="submitBtn" style="margin-top:18px">Reset password</button>
+
+    <p class="resend" id="resendLine">
+      Didn't get the code? <a id="resendLink">Resend code</a>
+    </p>
+
+    <p class="switch-line"><a href="/login">Back to log in</a></p>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    const inputs = Array.from({ length: 6 }, () => {
+      const el = document.createElement('input');
+      el.type = 'text';
+      el.inputMode = 'numeric';
+      el.maxLength = 1;
+      el.addEventListener('input', () => {
+        el.value = el.value.replace(/[^0-9]/g, '');
+        if (el.value && el.nextElementSibling) el.nextElementSibling.focus();
+      });
+      el.addEventListener('keydown', (e) => {
+        if (e.key === 'Backspace' && !el.value && el.previousElementSibling) {
+          el.previousElementSibling.focus();
+        }
+      });
+      return el;
+    });
+    const box = $id('otpBox');
+    inputs.forEach((i) => box.appendChild(i));
+
+    function getOtp() {
+      return inputs.map((i) => i.value).join('');
+    }
+
+    $id('password').addEventListener('input', () => {
+      const pw = $id('password').value;
+      const checks = getPasswordChecks(pw);
+      const items = { cLen: checks.len, cUpper: checks.upper, cLower: checks.lower, cDigit: checks.digit, cSpecial: checks.special };
+      for (const [id, ok] of Object.entries(items)) {
+        const el = $id(id);
+        el.className = ok ? 'ok' : 'bad';
+        el.innerHTML = (ok ? '&#10003; ' : '&#10007; ') + el.textContent.replace(/^[\s\S]*?\u2713\s*|^[\s\S]*?\u2717\s*/, '');
+      }
+      const score = Object.values(checks).filter(Boolean).length;
+      const fill = $id('meterFill');
+      fill.style.width = (score / 5) * 100 + '%';
+      fill.className = 'meter-fill ' + (score <= 2 ? 'weak' : score <= 4 ? 'fair' : 'strong');
+    });
+
+    $id('resendLink').addEventListener('click', async () => {
+      hideMsg();
+      const link = $id('resendLink');
+      link.style.pointerEvents = 'none';
+      link.textContent = 'Sending...';
+      try {
+        const data = await api('/api/forgot-password', { email: sessionStorage.getItem('resetEmail') });
+        if (data.ok) {
+          showMsg('success', 'A new code was sent.');
+        } else {
+          showMsg('error', data.error);
+        }
+      } catch {
+        showMsg('error', 'Network error. Please try again.');
+      } finally {
+        link.style.pointerEvents = '';
+        link.textContent = 'Resend code';
+      }
+    });
+
+    $id('submitBtn').addEventListener('click', async () => {
+      hideMsg();
+      const btn = $id('submitBtn');
+      setLoading(btn, true);
+      try {
+        const data = await api('/api/reset-password', {
+          otp: getOtp(),
+          password: $id('password').value,
+          confirmPassword: $id('confirmPassword').value,
+        });
+        if (data.ok) {
+          showMsg('success', 'Password changed. Redirecting to login...');
+          setTimeout(() => { window.location.href = '/login?reset=1'; }, 1200);
+        } else {
+          showMsg('error', data.error);
+        }
+      } catch {
+        showMsg('error', 'Network error. Please try again.');
+      } finally {
+        setLoading(btn, false);
+      }
+    });
+
+    (async () => {
+      const email = sessionStorage.getItem('resetEmail');
+      if (email) {
+        $id('subtitle').textContent = 'Enter the 6-digit code sent to ' + email + ', then choose a new password.';
+      }
+      inputs[0].focus();
+    })();
+  </script>
+</body>
+</html>

@@ -21,12 +21,13 @@ A production-ready authentication system that keeps bots out and real users in:
 
 | Feature | Details |
 |---------|---------|
-| 🧑‍🤝‍🧑 **Registration** | First name, last name, **email and/or mobile** (real email checked via DNS MX lookup) |
+| 🧑‍🤝‍🧑 **Registration** | First name, last name, **email (required)** + mobile (optional), real email checked via DNS MX lookup |
 | 🛡️ **Captcha** | Auto-refreshing math captcha stops bots, with expiry + one-time use |
 | 🔒 **Strong passwords** | Min 6 chars + uppercase + lowercase + digit + special char, with a **live strength meter** and rule checklist |
 | 📧📱 **OTP verification** | 6-digit code via **email (SMTP)** or **SMS (Firebase Phone Auth)** — email works everywhere; SMS needs Firebase **Blaze** billing (free up to 10k/month) + SMS region enabled |
 | ⏳ **OTP hardening** | 10-min expiry, hashed storage, 60s resend cooldown, max 3 sends, **5 wrong attempts = code burned** |
 | 🚫 **Brute-force lockout** | 5 failed logins = account locked 15 minutes |
+| 🔑 **Forgot password** | Enter email → receive a reset code → set a new password (bcrypt-hashed, stored) |
 | 🗄️ **Supabase storage** | Login details stored in cloud Postgres — auto-falls back to SQLite if unconfigured |
 | 🕒 **Full audit trail** | Tracks every login (timestamps per login in `logins` table) + `verified_at` / `last_login_at`, shown on the dashboard |
 | 🗑️ **Delete account** | Users can permanently delete their own account (cascades OTPs + login history) |
@@ -50,9 +51,11 @@ npm start                 # → http://localhost:3000
 
 ## 📋 Pages
 
-- `/login` — email/mobile + password, auto-OTP for unverified accounts
-- `/register` — full signup flow (names, contact, captcha, strong password)
+- `/login` — email/mobile + password, auto-OTP for unverified accounts, **Forgot password** link
+- `/register` — full signup flow (names, email required, mobile optional, captcha, strong password)
 - `/verify` — 6-digit OTP entry with resend countdown
+- `/forgot-password` — request a password-reset code by email
+- `/reset-password` — enter the code + new password
 - `/dashboard` — logged-in profile view (name, email, mobile, verified badge) + **login history** + **delete account**
 
 ## 🔧 Environment variables (`.env`)
@@ -81,6 +84,8 @@ npm start                 # → http://localhost:3000
 | `POST` | `/api/captcha` | Get a captcha challenge (SVG) |
 | `POST` | `/api/register` | Create account + send OTP |
 | `POST` | `/api/verify-otp` | Verify the 6-digit code |
+| `POST` | `/api/forgot-password` | Send a password-reset code to an email |
+| `POST` | `/api/reset-password` | Verify code + set a new password |
 | `POST` | `/api/resend-otp` | Resend code (60s cooldown) |
 | `POST` | `/api/login` | Log in (OTP sent if unverified) |
 | `POST` | `/api/logout` | End session |
@@ -92,7 +97,7 @@ npm start                 # → http://localhost:3000
 
 Full **end-to-end + adversarial** suite passed against the live Supabase database:
 
-✅ register → captcha → OTP → verify → login &nbsp;·&nbsp; ✅ wrong captcha rejected &nbsp;·&nbsp; ✅ weak passwords rejected &nbsp;·&nbsp; ✅ OTP brute-force blocked (code burned after 5) &nbsp;·&nbsp; ✅ 60s resend cooldown &nbsp;·&nbsp; ✅ duplicate account → 409 &nbsp;·&nbsp; ✅ logout clears session &nbsp;·&nbsp; ✅ login lockout after 5 fails &nbsp;·&nbsp; ✅ fresh login &nbsp;·&nbsp; ✅ login history + verified_at/last_login_at recorded &nbsp;·&nbsp; ✅ account deletion (cascades OTPs + history)
+✅ register → captcha → OTP → verify → login &nbsp;·&nbsp; ✅ wrong captcha rejected &nbsp;·&nbsp; ✅ weak passwords rejected &nbsp;·&nbsp; ✅ OTP brute-force blocked (code burned after 5) &nbsp;·&nbsp; ✅ 60s resend cooldown &nbsp;·&nbsp; ✅ duplicate account → 409 &nbsp;·&nbsp; ✅ logout clears session &nbsp;·&nbsp; ✅ login lockout after 5 fails &nbsp;·&nbsp; ✅ fresh login &nbsp;·&nbsp; ✅ login history + verified_at/last_login_at recorded &nbsp;·&nbsp; ✅ account deletion (cascades OTPs + history) &nbsp;·&nbsp; ✅ forgot-password reset (old password stops working, new one works)
 
 ## 📦 Deploy to Render (free)
 

@@ -57,6 +57,7 @@ const userStmts = {
   ),
   verify: db.prepare('UPDATE users SET verified = 1, verified_at = ? WHERE id = ?'),
   updateLastLogin: db.prepare('UPDATE users SET last_login_at = ? WHERE id = ?'),
+  updatePassword: db.prepare('UPDATE users SET password_hash = ? WHERE id = ?'),
   delete: db.prepare('DELETE FROM users WHERE id = ?'),
 };
 

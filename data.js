@@ -47,6 +47,12 @@ async function updateLastLogin(id) {
   return findUserById(id);
 }
 
+async function updatePassword(id, passwordHash) {
+  if (DRIVER === 'supabase') return supabase.updatePassword(id, passwordHash);
+  sqlite.userStmts.updatePassword.run(passwordHash, id);
+  return findUserById(id);
+}
+
 async function deleteUser(id) {
   if (DRIVER === 'supabase') return supabase.deleteUser(id);
   sqlite.userStmts.delete.run(id);
@@ -121,6 +127,7 @@ module.exports = {
   createUser,
   markUserVerified,
   updateLastLogin,
+  updatePassword,
   deleteUser,
   insertLogin,
   recordLogin,

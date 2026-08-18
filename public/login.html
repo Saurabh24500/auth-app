@@ -22,6 +22,7 @@
         <input type="password" id="password" autocomplete="current-password" required />
       </div>
       <button type="submit" class="btn" id="submitBtn">Log in</button>
+      <p class="switch-line"><a href="/forgot-password">Forgot password?</a></p>
     </form>
 
     <p class="switch-line">New here? <a href="/register">Create an account</a></p>
@@ -29,6 +30,11 @@
 
   <script src="app.js"></script>
   <script>
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('reset') === '1') {
+      showMsg('success', 'Password changed. Log in with your new password.');
+    }
+
     if (sessionStorage.getItem('justRegistered')) {
       sessionStorage.removeItem('justRegistered');
     }

@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Forgot Password</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="card">
+    <h1>Forgot password?</h1>
+    <p class="subtitle">Enter your email and we'll send you a verification code.</p>
+    <div id="msg" class="msg"></div>
+
+    <form id="forgotForm" novalidate>
+      <div class="field">
+        <label for="email">Email</label>
+        <input type="email" id="email" autocomplete="email" placeholder="you@example.com" required />
+      </div>
+      <button type="submit" class="btn" id="submitBtn">Send reset code</button>
+    </form>
+
+    <p class="switch-line">Remembered it? <a href="/login">Back to log in</a></p>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    $id('forgotForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      hideMsg();
+      const btn = $id('submitBtn');
+      setLoading(btn, true);
+
+      try {
+        const data = await api('/api/forgot-password', { email: $id('email').value });
+        if (data.ok) {
+          sessionStorage.setItem('resetEmail', $id('email').value.trim());
+          showMsg('success', 'If an account exists, a reset code was sent to ' + data.masked + '.');
+          setTimeout(() => { window.location.href = '/reset-password'; }, 1200);
+        } else {
+          showMsg('error', data.error);
+        }
+      } catch {
+        showMsg('error', 'Network error. Please try again.');
+      } finally {
+        setLoading(btn, false);
+      }
+    });
+  </script>
+</body>
+</html>

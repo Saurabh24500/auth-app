@@ -111,6 +111,41 @@ async function issueOtp(user, destination) {
   await sendOtpEmail(destination, otp, `${user.first_name} ${user.last_name}`);
 }
 
+async function verifyOtpFor(userId, channel, otp) {
+  if (!otp || !/^[0-9]{6}$/.test(String(otp))) {
+    const err = new Error('Enter the 6-digit code.');
+    err.status = 400;
+    throw err;
+  }
+  const row = await data.latestActiveOtp(userId, channel);
+  if (!row) {
+    const err = new Error('Code is invalid or expired. Request a new one.');
+    err.status = 400;
+    throw err;
+  }
+  const key = `${userId}:${channel}`;
+  const attempt = otpAttempts.get(key) || { count: 0, resetAt: 0 };
+  if (attempt.count >= MAX_OTP_ATTEMPTS && Date.now() < attempt.resetAt) {
+    await data.markOtpUsed(row.id);
+    const err = new Error('Too many wrong attempts. Request a new code.');
+    err.status = 429;
+    throw err;
+  }
+  const expected = hashCode(`${userId}:${String(otp)}`);
+  if (row.code_hash !== expected) {
+    attempt.count += 1;
+    attempt.resetAt = Date.now() + OTP_TTL_MS;
+    otpAttempts.set(key, attempt);
+    if (attempt.count >= MAX_OTP_ATTEMPTS) await data.markOtpUsed(row.id);
+    const err = new Error('Incorrect code.');
+    err.status = 400;
+    throw err;
+  }
+  otpAttempts.delete(key);
+  await data.markOtpUsed(row.id);
+  return row;
+}
+
 app.post('/api/captcha', (req, res) => {
   cleanupCaptchas();
   res.json({ ok: true, ...setCaptcha() });
@@ -124,13 +159,13 @@ app.post('/api/register', async (req, res) => {
     const errName2 = validateName(lastName, 'Last name');
     if (errName1 || errName2) return res.status(400).json({ ok: false, error: errName1 || errName2 });
 
-    if (!email && !mobile) {
-      return res.status(400).json({ ok: false, error: 'Enter an email or a mobile number.' });
+    if (!email) {
+      return res.status(400).json({ ok: false, error: 'Email is required.' });
     }
 
     let emailVal = null;
     let mobileVal = null;
-    if (email) {
+    {
       const r = validateEmail(email);
       if (typeof r === 'string') return res.status(400).json({ ok: false, error: r });
       emailVal = r.email;
@@ -252,33 +287,12 @@ app.post('/api/verify-otp', async (req, res) => {
   if (!userId) return res.status(401).json({ ok: false, error: 'No pending verification.' });
 
   const channel = req.session.otpChannel || 'email';
-  if (!otp || !/^[0-9]{6}$/.test(String(otp))) {
-    return res.status(400).json({ ok: false, error: 'Enter the 6-digit code.' });
+  try {
+    await verifyOtpFor(userId, channel, otp);
+  } catch (err) {
+    return res.status(err.status || 400).json({ ok: false, error: err.message });
   }
 
-  const row = await data.latestActiveOtp(userId, channel);
-  if (!row) {
-    return res.status(400).json({ ok: false, error: 'Code is invalid or expired. Request a new one.' });
-  }
-
-  const key = `${userId}:${channel}`;
-  const attempt = otpAttempts.get(key) || { count: 0, resetAt: 0 };
-  if (attempt.count >= MAX_OTP_ATTEMPTS && Date.now() < attempt.resetAt) {
-    await data.markOtpUsed(row.id);
-    return res.status(429).json({ ok: false, error: 'Too many wrong attempts. Request a new code.' });
-  }
-
-  const expected = hashCode(`${userId}:${String(otp)}`);
-  if (row.code_hash !== expected) {
-    attempt.count += 1;
-    attempt.resetAt = Date.now() + OTP_TTL_MS;
-    otpAttempts.set(key, attempt);
-    if (attempt.count >= MAX_OTP_ATTEMPTS) await data.markOtpUsed(row.id);
-    return res.status(400).json({ ok: false, error: 'Incorrect code.' });
-  }
-
-  otpAttempts.delete(key);
-  await data.markOtpUsed(row.id);
   await data.markUserVerified(userId);
   await data.recordLogin(userId);
 
@@ -287,6 +301,52 @@ app.post('/api/verify-otp', async (req, res) => {
   delete req.session.pendingUserId;
   const user = await data.findUserById(userId);
   res.json({ ok: true, name: `${user.first_name} ${user.last_name}` });
+});
+
+app.post('/api/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+    const r = validateEmail(email);
+    if (typeof r === 'string') return res.status(400).json({ ok: false, error: r });
+
+    const user = await data.findUserByEmail(r.email);
+    if (user) {
+      await issueOtp(user, r.email);
+      await regenerateSession(req);
+      req.session.resetUserId = user.id;
+      req.session.otpChannel = 'email';
+      req.session.otpDestination = r.email;
+    }
+    res.json({ ok: true, masked: maskIdentifier(r.email) });
+  } catch (err) {
+    const status = err.status || 500;
+    if (status === 500) console.error(err);
+    res.status(status).json({ ok: false, error: status === 500 ? 'Failed to send reset code.' : err.message });
+  }
+});
+
+app.post('/api/reset-password', async (req, res) => {
+  try {
+    const userId = req.session.resetUserId;
+    if (!userId) return res.status(401).json({ ok: false, error: 'No password reset in progress.' });
+
+    const { otp, password, confirmPassword } = req.body;
+    const passErr = validatePassword(password);
+    if (passErr) return res.status(400).json({ ok: false, error: passErr });
+    if (password !== confirmPassword) {
+      return res.status(400).json({ ok: false, error: 'Passwords do not match.' });
+    }
+
+    await verifyOtpFor(userId, 'email', otp);
+    const hash = await bcrypt.hash(password, 10);
+    await data.updatePassword(userId, hash);
+
+    req.session.destroy(() => res.json({ ok: true }));
+  } catch (err) {
+    const status = err.status || 500;
+    if (status === 500) console.error(err);
+    res.status(status).json({ ok: false, error: status === 500 ? 'Failed to reset password.' : err.message });
+  }
 });
 
 app.post('/api/login', async (req, res) => {
@@ -459,6 +519,11 @@ function requireAuth(req, res, next) {
 
 app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
 app.get('/register', (req, res) => res.sendFile(path.join(__dirname, 'public', 'register.html')));
+app.get('/forgot-password', (req, res) => res.sendFile(path.join(__dirname, 'public', 'forgot.html')));
+app.get('/reset-password', (req, res) => {
+  if (!req.session.resetUserId) return res.redirect('/forgot-password');
+  res.sendFile(path.join(__dirname, 'public', 'reset.html'));
+});
 app.get('/verify', (req, res) => {
   if (!req.session.pendingUserId && !req.session.userId) return res.redirect('/register');
   res.sendFile(path.join(__dirname, 'public', 'verify.html'));
@@ -482,7 +547,7 @@ app.listen(PORT, async () => {
     console.log('  Database:          SQLite (auth.db)\n');
   }
 
-  console.log('  Pages: /login  /register  /verify  /dashboard\n');
+  console.log('  Pages: /login  /register  /verify  /forgot-password  /reset-password  /dashboard\n');
   if (!process.env.SMTP_HOST) {
     console.log('  NOTE: No SMTP configured - email OTPs are printed to this console.\n');
   }
