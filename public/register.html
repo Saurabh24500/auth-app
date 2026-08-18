@@ -139,6 +139,20 @@
     });
 
     loadCaptcha();
+
+    (async () => {
+      try {
+        const res = await fetch('/api/firebase/config');
+        const cfg = await res.json();
+        if (!cfg.ok) {
+          const hint = document.createElement('div');
+          hint.className = 'hint show';
+          hint.style.marginBottom = '16px';
+          hint.textContent = 'SMS verification is disabled on this server - use your email address to receive the code.';
+          document.querySelector('.card .subtitle').after(hint);
+        }
+      } catch {}
+    })();
   </script>
 </body>
 </html>

@@ -97,7 +97,10 @@
         if (err && (err.code === 'auth/invalid-phone-number' || err.code === 'auth/missing-phone-number')) {
           message = 'Invalid phone number. Please re-register with a correct number.';
         }
-        showMsg('error', message);
+        if (err && /BILLING_NOT_ENABLED|OPERATION_NOT_ALLOWED/i.test(String(err.message))) {
+          message = 'SMS is disabled on this server. Please log in with an email address instead.';
+        }
+        showMsg('error', message + (err && err.code ? ' (' + err.code + ')' : ''));
         link.style.pointerEvents = '';
         link.textContent = 'Resend code';
       }

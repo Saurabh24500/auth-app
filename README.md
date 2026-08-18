@@ -24,7 +24,7 @@ A production-ready authentication system that keeps bots out and real users in:
 | 🧑‍🤝‍🧑 **Registration** | First name, last name, **email and/or mobile** (real email checked via DNS MX lookup) |
 | 🛡️ **Captcha** | Auto-refreshing math captcha stops bots, with expiry + one-time use |
 | 🔒 **Strong passwords** | Min 6 chars + uppercase + lowercase + digit + special char, with a **live strength meter** and rule checklist |
-| 📧📱 **OTP verification** | 6-digit code via **email (SMTP)** or **SMS (Firebase Phone Auth)** — free tier, sent after signup *and* after login of unverified accounts |
+| 📧📱 **OTP verification** | 6-digit code via **email (SMTP)** or **SMS (Firebase Phone Auth)** — email works everywhere; SMS needs Firebase **Blaze** billing (free up to 10k/month) + SMS region enabled |
 | ⏳ **OTP hardening** | 10-min expiry, hashed storage, 60s resend cooldown, max 3 sends, **5 wrong attempts = code burned** |
 | 🚫 **Brute-force lockout** | 5 failed logins = account locked 15 minutes |
 | 🗄️ **Supabase storage** | Login details stored in cloud Postgres — auto-falls back to SQLite if unconfigured |
