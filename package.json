@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "tunnel": "%USERPROFILE%\\cloudflared\\cloudflared.exe tunnel --url http://localhost:3000"
+    "tunnel": "%USERPROFILE%\\cloudflared\\cloudflared.exe tunnel --url http://localhost:3000",
+    "test:mail": "node scripts/test-mail.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

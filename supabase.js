@@ -16,9 +16,13 @@ async function resolveKey() {
   if (activeKey) return activeKey;
   for (const key of CANDIDATE_KEYS) {
     try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000);
       const res = await fetch(`${SUPABASE_URL}/rest/v1/users?select=id&limit=1`, {
         headers: { apikey: key, Authorization: `Bearer ${key}` },
+        signal: controller.signal,
       });
+      clearTimeout(timeout);
       if (res.status === 401) continue;
       activeKey = key;
       return key;
@@ -54,6 +58,8 @@ async function request(path, { method = 'GET', body, headers = {}, query = '' } 
   }
 
   const url = `${SUPABASE_URL}/rest/v1${path}${query}`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
   const res = await fetch(url, {
     method,
     headers: {
@@ -63,7 +69,9 @@ async function request(path, { method = 'GET', body, headers = {}, query = '' } 
       ...headers,
     },
     body: body ? JSON.stringify(body) : undefined,
+    signal: controller.signal,
   });
+  clearTimeout(timeout);
   if (!res.ok) {
     const text = await res.text();
     const err = new Error(`Supabase error ${res.status}: ${text}`);

@@ -15,7 +15,7 @@ const {
   maskIdentifier,
 } = require('./validators');
 const { generateChallenge, svgCaptcha } = require('./captcha');
-const { sendOtpEmail } = require('./mailer');
+const { sendOtpEmail, sendWelcomeEmail, buildTransporter, getLastPreviewUrl, isUsingPreview } = require('./mailer');
 const supabase = require('./supabase');
 const firebase = require('./firebase');
 
@@ -44,7 +44,7 @@ app.use(
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.get('/', (req, res) => res.redirect('/login'));
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 const OTP_TTL_MS = 10 * 60 * 1000;
 const CAPTCHA_TTL_MS = 5 * 60 * 1000;
@@ -148,7 +148,10 @@ async function verifyOtpFor(userId, channel, otp) {
 
 app.post('/api/captcha', (req, res) => {
   cleanupCaptchas();
-  res.json({ ok: true, ...setCaptcha() });
+  const challenge = setCaptcha();
+  const dev = process.env.NODE_ENV !== 'production';
+  const answer = dev ? captchaStore.get(challenge.id)?.answer : undefined;
+  res.json({ ok: true, id: challenge.id, svg: challenge.svg, ...(answer ? { answer } : {}) });
 });
 
 app.post('/api/register', async (req, res) => {
@@ -295,6 +298,12 @@ app.post('/api/verify-otp', async (req, res) => {
 
   await data.markUserVerified(userId);
   await data.recordLogin(userId);
+
+  const verifiedUser = await data.findUserById(userId);
+  if (verifiedUser && verifiedUser.email) {
+    sendWelcomeEmail(verifiedUser.email, `${verifiedUser.first_name} ${verifiedUser.last_name}`)
+      .catch((e) => console.error('[EMAIL] Welcome email failed:', e.message));
+  }
 
   await regenerateSession(req);
   req.session.userId = userId;
@@ -471,6 +480,13 @@ app.get('/api/pending', (req, res) => {
   });
 });
 
+if (process.env.NODE_ENV !== 'production') {
+  app.get('/api/dev/last-email', (req, res) => {
+    const url = getLastPreviewUrl();
+    res.json({ ok: !!url, usingPreview: isUsingPreview(), url });
+  });
+}
+
 app.get('/api/firebase/config', (req, res) => {
   if (!firebase.isConfigured()) return res.json({ ok: false, error: 'Firebase is not configured.' });
   res.json({ ok: true, ...firebase.webConfig() });
@@ -533,24 +549,28 @@ app.get('/dashboard', requireAuth, (req, res) =>
 );
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, async () => {
+app.listen(PORT, () => {
   console.log(`\n  Auth app running:  http://localhost:${PORT}\n`);
 
   if (data.DRIVER === 'supabase') {
-    const dbStatus = await supabase.status().catch(() => ({ usable: false, keyLabel: 'none' }));
-    console.log(
-      dbStatus.usable
-        ? `  Database:          Supabase (key accepted: ${dbStatus.keyLabel})\n`
-        : `  Database:          Supabase - NO VALID KEY! None of the keys in .env are accepted by the project.\n`
-    );
+    supabase.status().then((dbStatus) => {
+      console.log(
+        dbStatus.usable
+          ? `  Database:          Supabase (key accepted: ${dbStatus.keyLabel})\n`
+          : `  Database:          Supabase - NO VALID KEY! None of the keys in .env are accepted by the project.\n`
+      );
+    }).catch(() => {
+      console.log('  Database:          Supabase - connection check failed\n');
+    });
   } else {
     console.log('  Database:          SQLite (auth.db)\n');
   }
 
   console.log('  Pages: /login  /register  /verify  /forgot-password  /reset-password  /dashboard\n');
   if (!process.env.SMTP_HOST) {
-    console.log('  NOTE: No SMTP configured - email OTPs are printed to this console.\n');
+    console.log('  NOTE: No SMTP_HOST set - using Ethereal preview inbox in development.\n');
   }
+  buildTransporter();
   if (!firebase.isConfigured()) {
     console.log('  NOTE: Firebase not configured - SMS verification is disabled.\n');
   } else {

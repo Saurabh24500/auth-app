@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Auth App — Secure sign-up & login</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="landing">
+    <section class="hero">
+      <h1>Secure accounts, <span>without the friction</span></h1>
+      <p>Auth App gives your users a clean sign-up and login experience backed by strong password policies, bot protection, and email or SMS verification codes.</p>
+      <div class="cta">
+        <a class="primary" href="/register">Create free account</a>
+        <a class="ghost" href="/login">Log in</a>
+      </div>
+    </section>
+
+    <section class="features">
+      <div class="feature">
+        <div class="ico">🔐</div>
+        <h3>Strong password policy</h3>
+        <p>Enforced length, mixed case, digits and symbols — with a live strength meter as users type.</p>
+      </div>
+      <div class="feature">
+        <div class="ico">✉️</div>
+        <h3>Email & SMS OTP</h3>
+        <p>Verify identities with one-time codes sent by email or Firebase SMS before an account goes live.</p>
+      </div>
+      <div class="feature">
+        <div class="ico">🤖</div>
+        <h3>Bot protection</h3>
+        <p>A math captcha blocks automated sign-up abuse while staying accessible to real humans.</p>
+      </div>
+      <div class="feature">
+        <div class="ico">🛡️</div>
+        <h3>Brute-force defense</h3>
+        <p>Failed login attempts are rate-limited and accounts lock temporarily after repeated failures.</p>
+      </div>
+      <div class="feature">
+        <div class="ico">📊</div>
+        <h3>Login history</h3>
+        <p>Users can review recent activity and delete their account anytime from a private dashboard.</p>
+      </div>
+      <div class="feature">
+        <div class="ico">⚡</div>
+        <h3>Fast & lightweight</h3>
+        <p>A single Node.js process with SQLite or Supabase — no heavy dependencies to manage.</p>
+      </div>
+    </section>
+
+    <div class="footer">
+      Auth App · Demo project · Built with Node.js, Express &amp; SQLite
+    </div>
+  </main>
+
+  <script src="nav.js"></script>
+</body>
+</html>

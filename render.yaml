@@ -5,6 +5,7 @@ services:
   - type: web
     name: auth-app
     runtime: node
+    nodeVersion: "22"
     plan: free
     buildCommand: npm install
     startCommand: node server.js
@@ -15,6 +16,8 @@ services:
         value: https://fjwvrrvyisatbjsjfcok.supabase.co
       # Set these manually in Render -> Environment (hidden, not in repo):
       - key: SUPABASE_SECRET_KEY
+        sync: false
+      - key: SUPABASE_PUBLISHABLE_KEY
         sync: false
       - key: SMTP_HOST
         value: smtp.gmail.com

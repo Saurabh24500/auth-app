@@ -5,4 +5,8 @@ auth.db-*
 .env.*
 !.env.example
 *.log
+*.err
+*.err.log
+server.err
+server.err.log
 progress.txt
