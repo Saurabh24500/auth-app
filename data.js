@@ -58,6 +58,16 @@ async function deleteUser(id) {
   sqlite.userStmts.delete.run(id);
 }
 
+// Remove unverified accounts older than `hours` (stale sign-up attempts / spam).
+// Verified users are never touched, so they remain the real auth users.
+async function purgeUnverified(hours = 24) {
+  if (DRIVER === 'supabase') {
+    const cutoff = new Date(Date.now() - hours * 3600 * 1000).toISOString();
+    return supabase.deleteUnverified(cutoff);
+  }
+  return sqlite.userStmts.purgeUnverified.run(hours);
+}
+
 async function insertLogin(userId) {
   if (DRIVER === 'supabase') return supabase.insertLogin(userId);
   sqlite.loginStmts.insert.run(userId, new Date().toISOString());
@@ -138,4 +148,5 @@ module.exports = {
   getLoginAttempt,
   upsertLoginAttempt,
   clearLoginAttempt,
+  purgeUnverified,
 };

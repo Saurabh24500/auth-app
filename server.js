@@ -108,7 +108,14 @@ async function issueOtp(user, destination) {
     expiresAt: new Date(Date.now() + OTP_TTL_MS).toISOString(),
   });
 
-  await sendOtpEmail(destination, otp, `${user.first_name} ${user.last_name}`);
+  const sent = await sendOtpEmail(destination, otp, `${user.first_name} ${user.last_name}`);
+  if (sent === 'console') {
+    const err = new Error(
+      'We could not send the verification email (email delivery is not configured). Please contact support or try again later.'
+    );
+    err.status = 503;
+    throw err;
+  }
 }
 
 async function verifyOtpFor(userId, channel, otp) {
@@ -576,9 +583,20 @@ app.listen(PORT, () => {
 
   console.log('  Pages: /login  /register  /verify  /forgot-password  /reset-password  /dashboard\n');
   if (!process.env.SMTP_HOST) {
-    console.log('  NOTE: No SMTP_HOST set - using Ethereal preview inbox in development.\n');
+    if (process.env.NODE_ENV === 'production') {
+      console.error('  WARN: No SMTP_HOST set in production - verification emails cannot be sent!\n');
+    } else {
+      console.log('  NOTE: No SMTP_HOST set - using Ethereal preview inbox in development.\n');
+    }
   }
   buildTransporter();
+
+  // Two-bucket cleanup: drop stale unverified accounts (attempts/spam) so only
+  // verified users remain as the real auth users. Runs once now and every 6h.
+  data.purgeUnverified(24).catch((e) => console.error('[PURGE] failed:', e.message));
+  setInterval(() => {
+    data.purgeUnverified(24).catch((e) => console.error('[PURGE] failed:', e.message));
+  }, 6 * 60 * 60 * 1000);
   if (!firebase.isConfigured()) {
     console.log('  NOTE: Firebase not configured - SMS verification is disabled.\n');
   } else {

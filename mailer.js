@@ -50,20 +50,24 @@ async function buildTransporter() {
   }
 
   // Non-production fallback: Ethereal preview inbox so the email flow is fully testable.
-  try {
-    const testAccount = await nodemailer.createTestAccount();
-    transporter = nodemailer.createTransport({
-      host: 'smtp.ethereal.email',
-      port: 587,
-      secure: false,
-      auth: { user: testAccount.user, pass: testAccount.pass },
-    });
-    usingPreview = true;
-    console.log('[SMTP] Using Ethereal preview account - emails are captured (not delivered to real inboxes).');
-  } catch (err) {
-    lastError = err.message;
-    console.error('[SMTP] Could not create preview account:', err.message);
-    transporter = null;
+  // (Intentionally disabled in production — there, a missing/broken SMTP must surface
+  // as an error rather than silently capturing mail to an unreachable preview.)
+  if (!isProd) {
+    try {
+      const testAccount = await nodemailer.createTestAccount();
+      transporter = nodemailer.createTransport({
+        host: 'smtp.ethereal.email',
+        port: 587,
+        secure: false,
+        auth: { user: testAccount.user, pass: testAccount.pass },
+      });
+      usingPreview = true;
+      console.log('[SMTP] Using Ethereal preview account - emails are captured (not delivered to real inboxes).');
+    } catch (err) {
+      lastError = err.message;
+      console.error('[SMTP] Could not create preview account:', err.message);
+      transporter = null;
+    }
   }
 }
 

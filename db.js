@@ -59,6 +59,9 @@ const userStmts = {
   updateLastLogin: db.prepare('UPDATE users SET last_login_at = ? WHERE id = ?'),
   updatePassword: db.prepare('UPDATE users SET password_hash = ? WHERE id = ?'),
   delete: db.prepare('DELETE FROM users WHERE id = ?'),
+  purgeUnverified: db.prepare(
+    "DELETE FROM users WHERE verified = 0 AND created_at < datetime('now', '-' || ? || ' hours')"
+  ),
 };
 
 const loginStmts = {

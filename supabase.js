@@ -141,6 +141,10 @@ module.exports = {
     return request(`/users?id=eq.${q(id)}`, { method: 'DELETE' });
   },
 
+  deleteUnverified(cutoffIso) {
+    return request(`/users?verified=eq.false&created_at=lt.${q(cutoffIso)}`, { method: 'DELETE' });
+  },
+
   insertLogin(userId) {
     return request('/logins', {
       method: 'POST',
