@@ -19,12 +19,14 @@
 
 A production-ready authentication system that keeps bots out and real users in:
 
+> ### ⚠️ Current status: **email OTP is the only working channel.** SMS (Firebase Phone Auth) is a **future goal** — it's fully wired in code but Google requires the project to be on the **Blaze** (billing) plan before it will send any SMS (`BILLING_NOT_ENABLED`). The moment billing is enabled, SMS works with no code changes.
+
 | Feature | Details |
 |---------|---------|
 | 🧑‍🤝‍🧑 **Registration** | First name, last name, **email (required)** + mobile (optional), real email checked via DNS MX lookup |
 | 🛡️ **Captcha** | Auto-refreshing math captcha stops bots, with expiry + one-time use |
 | 🔒 **Strong passwords** | Min 6 chars + uppercase + lowercase + digit + special char, with a **live strength meter** and rule checklist |
-| 📧📱 **OTP verification** | 6-digit code via **email (SMTP)** or **SMS (Firebase Phone Auth)** — email works everywhere; SMS needs Firebase **Blaze** billing (free up to 10k/month) + SMS region enabled |
+| 📧📱 **OTP verification** | 6-digit code via **email (SMTP)** — SMS (Firebase Phone Auth) is wired but a **future goal** (needs Firebase **Blaze** billing) |
 | ⏳ **OTP hardening** | 10-min expiry, hashed storage, 60s resend cooldown, max 3 sends, **5 wrong attempts = code burned** |
 | 🚫 **Brute-force lockout** | 5 failed logins = account locked 15 minutes |
 | 🔑 **Forgot password** | Enter email → receive a reset code → set a new password (bcrypt-hashed, stored) |
@@ -69,7 +71,7 @@ npm start                 # → http://localhost:3000
 | `SMTP_HOST` / `SMTP_USER` / `SMTP_PASS` / `EMAIL_FROM` | Gmail/SMTP for email OTP | for real emails |
 | `FIREBASE_PROJECT_ID` / `FIREBASE_CLIENT_EMAIL` / `FIREBASE_PRIVATE_KEY` / `FIREBASE_WEB_API_KEY` | Firebase (for free SMS OTP) | for SMS |
 
-> Without SMTP, email OTPs are printed to the server console (and logged in dev). SMS OTP uses **Firebase Phone Auth** (free tier, up to 10,000 verifications/month, global) — see the Firebase setup section below.
+> Without SMTP, email OTPs are printed to the server console (and logged in dev). SMS OTP uses **Firebase Phone Auth** — planned as a future goal; it requires the project on the **Blaze** plan (see the status note above).
 
 ## 🗄️ Database
 
