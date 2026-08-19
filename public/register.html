@@ -46,11 +46,18 @@
       <div class="row">
         <div class="field">
           <label for="password">Password</label>
-          <input type="password" id="password" autocomplete="new-password" required />
+          <div class="pw-wrap">
+            <input type="password" id="password" autocomplete="new-password" required />
+            <button type="button" class="pw-toggle" id="togglePassword" aria-label="Show password"></button>
+          </div>
         </div>
         <div class="field">
           <label for="confirmPassword">Confirm password</label>
-          <input type="password" id="confirmPassword" autocomplete="new-password" required />
+          <div class="pw-wrap">
+            <input type="password" id="confirmPassword" autocomplete="new-password" required />
+            <button type="button" class="pw-toggle" id="toggleConfirm" aria-label="Show password"></button>
+          </div>
+          <div class="match-feedback" id="matchFeedback"></div>
         </div>
       </div>
 
@@ -103,6 +110,10 @@
     $id('password').addEventListener('input', updatePasswordUI);
     $id('captchaRefresh').addEventListener('click', loadCaptcha);
 
+    setupEyeToggle('password', 'togglePassword');
+    setupEyeToggle('confirmPassword', 'toggleConfirm');
+    setupConfirmMatch('password', 'confirmPassword', 'matchFeedback');
+
     $id('registerForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       hideMsg();
@@ -127,6 +138,9 @@
           sessionStorage.setItem('otpFlow', data.firebase ? 'firebase' : 'email');
           showMsg('success', 'Account created. A verification code was sent to ' + data.masked + '.');
           setTimeout(() => { window.location.href = '/verify'; }, 900);
+        } else if (data.redirect) {
+          showMsg('error', data.error + ' Redirecting you to log in…');
+          setTimeout(() => { window.location.href = data.redirect; }, 1500);
         } else {
           showMsg('error', data.error);
           loadCaptcha();

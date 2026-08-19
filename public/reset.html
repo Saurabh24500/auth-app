@@ -9,18 +9,25 @@
 <body>
   <div class="card">
     <h1>Set a new password</h1>
-    <p class="subtitle">Enter the 6-digit code we emailed you, then choose a new password.</p>
+    <p class="subtitle" id="subtitle">Enter the 6-digit code we emailed you, then choose a new password.</p>
     <div id="msg" class="msg"></div>
 
     <div class="otp-box" id="otpBox"></div>
 
     <div class="field" style="margin-top:20px">
       <label for="password">New password</label>
-      <input type="password" id="password" autocomplete="new-password" required />
+      <div class="pw-wrap">
+        <input type="password" id="password" autocomplete="new-password" required />
+        <button type="button" class="pw-toggle" id="togglePassword" aria-label="Show password"></button>
+      </div>
     </div>
     <div class="field">
       <label for="confirmPassword">Confirm new password</label>
-      <input type="password" id="confirmPassword" autocomplete="new-password" required />
+      <div class="pw-wrap">
+        <input type="password" id="confirmPassword" autocomplete="new-password" required />
+        <button type="button" class="pw-toggle" id="toggleConfirm" aria-label="Show password"></button>
+      </div>
+      <div class="match-feedback" id="matchFeedback"></div>
     </div>
 
     <div class="meter"><div class="meter-fill" id="meterFill"></div></div>
@@ -81,6 +88,10 @@
       fill.style.width = (score / 5) * 100 + '%';
       fill.className = 'meter-fill ' + (score <= 2 ? 'weak' : score <= 4 ? 'fair' : 'strong');
     });
+
+    setupEyeToggle('password', 'togglePassword');
+    setupEyeToggle('confirmPassword', 'toggleConfirm');
+    setupConfirmMatch('password', 'confirmPassword', 'matchFeedback');
 
     $id('resendLink').addEventListener('click', async () => {
       hideMsg();

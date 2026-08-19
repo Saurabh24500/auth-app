@@ -312,6 +312,30 @@ input.input-error {
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* Password visibility toggle */
+.pw-wrap { position: relative; }
+.pw-wrap input { padding-right: 44px; }
+.pw-toggle {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  border-radius: 6px;
+}
+.pw-toggle:hover { color: var(--text); }
+.pw-toggle svg { width: 20px; height: 20px; }
+
+.match-feedback { font-size: 12.5px; margin-top: 6px; min-height: 16px; line-height: 1.4; }
+.match-feedback.bad { color: var(--danger); }
+.match-feedback.ok { color: var(--success); }
+
 /* Top navigation */
 .topnav {
   position: fixed;

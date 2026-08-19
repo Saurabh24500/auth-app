@@ -202,21 +202,21 @@ app.post('/api/register', async (req, res) => {
     if (emailVal) existing = await data.findUserByEmail(emailVal);
     if (!existing && mobileVal) existing = await data.findUserByMobile(mobileVal);
 
-    let user;
     if (existing) {
-      if (existing.verified) {
-        return res.status(409).json({ ok: false, error: 'An account with this email/mobile already exists. Please log in.' });
-      }
-      user = existing;
-    } else {
-      user = await data.createUser({
-        firstName,
-        lastName,
-        email: emailVal,
-        mobile: mobileVal,
-        password,
+      return res.status(409).json({
+        ok: false,
+        redirect: '/login',
+        error: 'An account with this email already exists. Please log in to continue.',
       });
     }
+
+    const user = await data.createUser({
+      firstName,
+      lastName,
+      email: emailVal,
+      mobile: mobileVal,
+      password,
+    });
 
     const channel = emailVal ? 'email' : 'sms';
     const destination = emailVal || mobileVal;
@@ -378,7 +378,10 @@ app.post('/api/login', async (req, res) => {
 
     if (!user) {
       await data.upsertLoginAttempt(key);
-      return res.status(401).json({ ok: false, error: 'No account found with that email/mobile.' });
+      return res.status(401).json({
+        ok: false,
+        error: 'No account found with that email/mobile. Check the spelling, or create a new account.',
+      });
     }
 
     const match = await bcrypt.compare(password, user.password_hash);
@@ -388,7 +391,10 @@ app.post('/api/login', async (req, res) => {
       if (updated.locked_until && new Date(updated.locked_until) > new Date()) {
         return res.status(429).json({ ok: false, error: 'Too many failed attempts. Account is locked for 15 minutes.' });
       }
-      return res.status(401).json({ ok: false, error: 'Incorrect password.' });
+      return res.status(401).json({
+        ok: false,
+        error: 'Incorrect password. Try again, or reset it from the login page.',
+      });
     }
 
     await data.clearLoginAttempt(key);
@@ -419,7 +425,9 @@ app.post('/api/login', async (req, res) => {
     res.json({ ok: true, name: `${user.first_name} ${user.last_name}` });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ ok: false, error: 'Login failed. Please try again.' });
+    const status = err.status || 500;
+    const msg = status === 500 ? 'Login failed. Please try again.' : err.message;
+    res.status(status).json({ ok: false, error: msg });
   }
 });
 
