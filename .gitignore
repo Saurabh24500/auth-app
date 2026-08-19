@@ -2,5 +2,7 @@ node_modules/
 auth.db
 auth.db-*
 .env
+.env.*
+!.env.example
 *.log
 progress.txt
